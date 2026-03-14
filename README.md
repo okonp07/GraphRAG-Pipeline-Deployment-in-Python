@@ -2,6 +2,10 @@
 
 A retrieval-augmented generation (RAG) system that combines a knowledge graph (Neo4j) with vector similarity search to improve document retrieval for question answering workloads.
 
+## Live Demo
+
+[Launch the Streamlit app](https://graphrag-pipeline-deployment-in-python-uxc9cluat75f24nn8vzcca.streamlit.app/)
+
 ## Overview
 
 This repository now includes a complete Python project structure alongside the original notebooks. The runnable code implements a hybrid retrieval pipeline that uses:
