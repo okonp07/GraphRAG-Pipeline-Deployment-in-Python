@@ -1,0 +1,2 @@
+Phishing attacks often rely on deceptive emails and fake login pages to steal credentials.
+Organizations can reduce risk with authentication controls, user awareness training, and email filtering.

@@ -1,0 +1,159 @@
+"""Vector store implementation with FAISS and a deterministic fallback embedder."""
+
+from __future__ import annotations
+
+import hashlib
+import pickle
+from pathlib import Path
+from typing import Any, Dict, List, Sequence
+
+import numpy as np
+
+try:
+    import faiss  # type: ignore
+except ImportError:  # pragma: no cover
+    faiss = None
+
+try:
+    from sentence_transformers import SentenceTransformer  # type: ignore
+except ImportError:  # pragma: no cover
+    SentenceTransformer = None
+
+
+class FallbackEmbedder:
+    """A deterministic hashing embedder used when sentence-transformers is unavailable."""
+
+    def __init__(self, dimension: int = 256):
+        self.dimension = dimension
+
+    def encode(self, texts: Sequence[str], **_: Any) -> np.ndarray:
+        embeddings = np.zeros((len(texts), self.dimension), dtype="float32")
+        for row, text in enumerate(texts):
+            for token in text.lower().split():
+                digest = hashlib.md5(token.encode("utf-8")).hexdigest()
+                index = int(digest, 16) % self.dimension
+                embeddings[row, index] += 1.0
+            norm = np.linalg.norm(embeddings[row])
+            if norm:
+                embeddings[row] /= norm
+        return embeddings
+
+
+def build_embedder(model_name: str, fallback_dim: int = 256) -> Any:
+    if SentenceTransformer is None:
+        return FallbackEmbedder(dimension=fallback_dim)
+    try:
+        return SentenceTransformer(model_name)
+    except Exception:
+        return FallbackEmbedder(dimension=fallback_dim)
+
+
+class NumpyIndex:
+    """A small similarity index used when FAISS is not available."""
+
+    def __init__(self, dimension: int):
+        self.dimension = dimension
+        self.vectors = np.zeros((0, dimension), dtype="float32")
+
+    def add(self, vectors: np.ndarray) -> None:
+        if vectors.size == 0:
+            return
+        self.vectors = np.vstack([self.vectors, vectors.astype("float32")])
+
+    def search(self, queries: np.ndarray, top_k: int):
+        if self.vectors.size == 0:
+            distances = np.full((len(queries), top_k), np.inf, dtype="float32")
+            indices = np.full((len(queries), top_k), -1, dtype="int64")
+            return distances, indices
+        diffs = self.vectors[None, :, :] - queries[:, None, :]
+        distances = np.sum(diffs * diffs, axis=2)
+        ranked = np.argsort(distances, axis=1)[:, :top_k]
+        ranked_distances = np.take_along_axis(distances, ranked, axis=1)
+        return ranked_distances.astype("float32"), ranked.astype("int64")
+
+
+class VectorStore:
+    """Embeds and stores documents for semantic search."""
+
+    def __init__(
+        self,
+        embedding_model: str,
+        embedding_dim: int = 256,
+        storage_path: Path | str = "artifacts/vector_store",
+    ):
+        self.storage_path = Path(storage_path)
+        self.embedder = build_embedder(embedding_model, fallback_dim=embedding_dim)
+        self.embedding_dim = getattr(self.embedder, "dimension", None)
+        self.metadata: List[Dict[str, Any]] = []
+        self.index = None
+
+    def _ensure_index(self, dimension: int) -> None:
+        if self.index is not None:
+            return
+        if faiss is not None:
+            self.index = faiss.IndexFlatL2(dimension)
+        else:
+            self.index = NumpyIndex(dimension)
+
+    def add_documents(self, documents: Sequence[Dict[str, Any]]) -> None:
+        if not documents:
+            return
+        texts = [doc["text"] for doc in documents]
+        vectors = np.asarray(self.embedder.encode(texts), dtype="float32")
+        self._ensure_index(vectors.shape[1])
+        self.index.add(vectors)
+        self.metadata.extend(documents)
+        self.embedding_dim = vectors.shape[1]
+
+    def search(self, query_text: str, top_k: int = 5) -> List[Dict[str, Any]]:
+        if self.index is None:
+            return []
+        query_vector = np.asarray(self.embedder.encode([query_text]), dtype="float32")
+        distances, indices = self.index.search(query_vector, top_k)
+        results = []
+        for rank, index_value in enumerate(indices[0]):
+            if index_value < 0 or index_value >= len(self.metadata):
+                continue
+            metadata = dict(self.metadata[index_value])
+            distance = float(distances[0][rank])
+            metadata.update(
+                {
+                    "score": 1.0 / (1.0 + distance),
+                    "distance": distance,
+                    "source": "vector",
+                }
+            )
+            results.append(metadata)
+        return results
+
+    def save(self) -> None:
+        self.storage_path.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "embedding_dim": self.embedding_dim,
+            "metadata": self.metadata,
+        }
+        with (self.storage_path / "store.pkl").open("wb") as file:
+            pickle.dump(payload, file)
+        if faiss is not None and self.index is not None and hasattr(faiss, "write_index"):
+            faiss.write_index(self.index, str(self.storage_path / "index.faiss"))
+
+    def load(self) -> None:
+        payload_path = self.storage_path / "store.pkl"
+        if not payload_path.exists():
+            return
+        with payload_path.open("rb") as file:
+            payload = pickle.load(file)
+        self.metadata = payload["metadata"]
+        self.embedding_dim = payload["embedding_dim"]
+        self._ensure_index(self.embedding_dim)
+        faiss_path = self.storage_path / "index.faiss"
+        if faiss is not None and faiss_path.exists():
+            self.index = faiss.read_index(str(faiss_path))
+            return
+        self.index = NumpyIndex(self.embedding_dim)
+        if self.metadata:
+            vectors = np.asarray(
+                self.embedder.encode([item["text"] for item in self.metadata]),
+                dtype="float32",
+            )
+            self.index.add(vectors)
