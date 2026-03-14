@@ -9,10 +9,13 @@ This repository now includes a complete Python project structure alongside the o
 - **Neo4j** for graph-based document/entity lookup
 - **FAISS** for semantic vector search
 - **A hybrid retriever** to combine graph and vector results into one ranked output
+- **Streamlit** for a browser-based interface
+- **S3-compatible object storage** for persistent online artifacts
 
 The current implementation is designed to work in two modes:
 
 - **Full mode:** Neo4j + FAISS + sentence-transformers
+- **Cloud mode:** Streamlit Cloud + Neo4j AuraDB + S3-compatible storage
 - **Local fallback mode:** in-memory graph search + deterministic hashing embeddings when optional services or models are unavailable
 
 That means you can develop and test the project locally even before connecting a live Neo4j instance.
@@ -27,6 +30,9 @@ That means you can develop and test the project locally even before connecting a
 - Hybrid retrieval combining graph and vector results
 - Simple query interface through Python scripts
 - Streamlit frontend for non-technical users
+- Streamlit Cloud deployment configuration
+- Streamlit secrets-based configuration support
+- S3-compatible artifact persistence for hosted deployments
 - Example scripts and automated tests
 
 ## Installation
@@ -59,6 +65,19 @@ That means you can develop and test the project locally even before connecting a
 
 4. Update `.env` with your Neo4j connection details if you want live Neo4j support. Set `GRAPHRAG_USE_NEO4J=true` to enable it.
 
+### Streamlit Cloud Deployment
+
+To deploy online:
+
+1. Push this repository to GitHub.
+2. Create a Streamlit Community Cloud app that points at `app.py`.
+3. Add your production secrets in the Streamlit Cloud secrets editor using the template in [.streamlit/secrets.toml.example](/Users/researchanddevelopment2/Documents/Zindi/GraphRAG-Pipeline-Deployment-in-Python/.streamlit/secrets.toml.example).
+4. Use:
+   - a managed Neo4j instance such as Neo4j AuraDB
+   - an S3-compatible bucket for persistent vector and document artifacts
+
+The repo includes Streamlit config in [.streamlit/config.toml](/Users/researchanddevelopment2/Documents/Zindi/GraphRAG-Pipeline-Deployment-in-Python/.streamlit/config.toml).
+
 ## Usage
 
 ### Frontend App
@@ -76,6 +95,8 @@ The app lets users:
 - load bundled sample files
 - ask questions in plain English
 - view the best match and supporting results without using the command line
+
+For hosted deployments, configure `storage.backend = "s3"` in Streamlit secrets so uploaded knowledge bases persist outside the app container.
 
 ### Data Ingestion
 
@@ -134,6 +155,9 @@ The system consists of four main components:
 ├── LICENSE
 ├── requirements.txt
 ├── .env.example
+├── .streamlit/
+│   ├── config.toml
+│   └── secrets.toml.example
 ├── config.py
 ├── app.py
 ├── ingest.py
@@ -143,6 +167,7 @@ The system consists of four main components:
 │   ├── app_service.py
 │   ├── ingest.py
 │   ├── query.py
+│   ├── storage.py
 │   ├── vector_store.py
 │   ├── knowledge_graph.py
 │   ├── hybrid_retriever.py
@@ -169,8 +194,15 @@ Edit [config.py](config.py) or update environment variables in `.env` to customi
 - Embedding model selection
 - Fallback embedding dimension
 - Neo4j connection parameters
+- Storage backend, bucket, prefix, and region
 - Retrieval weights and default `top_k`
 - Artifact output paths
+
+When running on Streamlit Cloud, configuration can come from:
+
+- environment variables
+- `.env` for local development
+- Streamlit secrets for hosted deployment
 
 ## Examples
 
@@ -194,6 +226,23 @@ To smoke test the frontend locally:
 ```bash
 streamlit run app.py
 ```
+
+## Online Persistence
+
+The app now supports persistent online storage for uploaded knowledge bases.
+
+- `local` storage backend:
+  stores FAISS indexes and document metadata on the local filesystem
+- `s3` storage backend:
+  stores FAISS indexes and document metadata in an S3-compatible bucket
+
+Artifacts persisted online include:
+
+- vector index metadata
+- FAISS index binary when available
+- document metadata JSON
+
+This avoids losing uploaded knowledge bases when the hosted app restarts.
 
 ## Contributing
 

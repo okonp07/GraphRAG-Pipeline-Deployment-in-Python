@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import pickle
+from io import BytesIO
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Any, Dict, List, Sequence
 
 import numpy as np
@@ -128,28 +130,72 @@ class VectorStore:
 
     def save(self) -> None:
         self.storage_path.mkdir(parents=True, exist_ok=True)
-        payload = {
-            "embedding_dim": self.embedding_dim,
-            "metadata": self.metadata,
-        }
-        with (self.storage_path / "store.pkl").open("wb") as file:
-            pickle.dump(payload, file)
-        if faiss is not None and self.index is not None and hasattr(faiss, "write_index"):
-            faiss.write_index(self.index, str(self.storage_path / "index.faiss"))
+        (self.storage_path / "store.pkl").write_bytes(self._metadata_bytes())
+        index_bytes = self._index_bytes()
+        if index_bytes is not None:
+            (self.storage_path / "index.faiss").write_bytes(index_bytes)
 
     def load(self) -> None:
         payload_path = self.storage_path / "store.pkl"
         if not payload_path.exists():
             return
-        with payload_path.open("rb") as file:
-            payload = pickle.load(file)
+        self._load_metadata_bytes(payload_path.read_bytes())
+        faiss_path = self.storage_path / "index.faiss"
+        if faiss is not None and faiss_path.exists():
+            self._load_index_bytes(faiss_path.read_bytes())
+            return
+        self._rebuild_index()
+
+    def save_to_backend(self, storage_backend, prefix: str = "") -> None:
+        storage_backend.upload_bytes(self._backend_key(prefix, "store.pkl"), self._metadata_bytes())
+        index_bytes = self._index_bytes()
+        if index_bytes is not None:
+            storage_backend.upload_bytes(self._backend_key(prefix, "index.faiss"), index_bytes)
+
+    def load_from_backend(self, storage_backend, prefix: str = "") -> None:
+        metadata_key = self._backend_key(prefix, "store.pkl")
+        if not storage_backend.exists(metadata_key):
+            return
+        self._load_metadata_bytes(storage_backend.download_bytes(metadata_key))
+        index_key = self._backend_key(prefix, "index.faiss")
+        if faiss is not None and storage_backend.exists(index_key):
+            self._load_index_bytes(storage_backend.download_bytes(index_key))
+            return
+        self._rebuild_index()
+
+    def _backend_key(self, prefix: str, filename: str) -> str:
+        cleaned = prefix.strip("/")
+        return f"{cleaned}/{filename}" if cleaned else filename
+
+    def _metadata_bytes(self) -> bytes:
+        payload = {
+            "embedding_dim": self.embedding_dim,
+            "metadata": self.metadata,
+        }
+        return pickle.dumps(payload)
+
+    def _load_metadata_bytes(self, data: bytes) -> None:
+        payload = pickle.loads(data)
         self.metadata = payload["metadata"]
         self.embedding_dim = payload["embedding_dim"]
         self._ensure_index(self.embedding_dim)
-        faiss_path = self.storage_path / "index.faiss"
-        if faiss is not None and faiss_path.exists():
-            self.index = faiss.read_index(str(faiss_path))
+
+    def _index_bytes(self) -> bytes | None:
+        if faiss is None or self.index is None or not hasattr(faiss, "write_index"):
+            return None
+        with NamedTemporaryFile(suffix=".faiss") as temp_file:
+            faiss.write_index(self.index, temp_file.name)
+            return Path(temp_file.name).read_bytes()
+
+    def _load_index_bytes(self, data: bytes) -> None:
+        if faiss is None:
+            self._rebuild_index()
             return
+        with NamedTemporaryFile(suffix=".faiss") as temp_file:
+            Path(temp_file.name).write_bytes(data)
+            self.index = faiss.read_index(temp_file.name)
+
+    def _rebuild_index(self) -> None:
         self.index = NumpyIndex(self.embedding_dim)
         if self.metadata:
             vectors = np.asarray(

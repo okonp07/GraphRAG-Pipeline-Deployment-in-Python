@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import List
 
 from config import Settings
+from .storage import build_storage_backend
 from .hybrid_retriever import HybridRetriever
 from .knowledge_graph import KnowledgeGraph
 from .utils import load_documents, save_json
@@ -13,8 +14,9 @@ from .vector_store import VectorStore
 
 
 class GraphRAGService:
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, storage_backend=None):
         self.settings = settings
+        self.storage_backend = storage_backend or build_storage_backend(settings)
         self.vector_store = VectorStore(
             embedding_model=settings.embedding_model,
             embedding_dim=settings.embedding_dim,
@@ -52,6 +54,9 @@ class GraphRAGService:
         self.vector_store.metadata = []
         self.vector_store.index = None
         self.graph.clear()
+        if self.settings.storage_backend.lower() == "s3":
+            self.storage_backend.delete_prefix("vector_store")
+            self.storage_backend.delete_prefix("documents")
 
     def ingest_directory(self, data_dir: Path) -> int:
         documents = load_documents(
@@ -61,16 +66,28 @@ class GraphRAGService:
         )
         self.reset()
         self.vector_store.add_documents(documents)
-        self.vector_store.save()
+        if self.settings.storage_backend.lower() == "s3":
+            self.vector_store.save_to_backend(self.storage_backend, "vector_store")
+        else:
+            self.vector_store.save()
         self.graph.ingest_documents(documents)
         save_json(self.settings.document_store_path, documents)
+        if self.settings.storage_backend.lower() == "s3":
+            self.storage_backend.upload_bytes(
+                "documents/documents.json",
+                self.settings.document_store_path.read_bytes(),
+                content_type="application/json",
+            )
         return len(documents)
 
     def query(self, query_text: str, top_k: int | None = None) -> List[dict]:
         return self.retriever.search(query_text, top_k=top_k or self.settings.top_k)
 
     def load_existing_artifacts(self) -> None:
-        self.vector_store.load()
+        if self.settings.storage_backend.lower() == "s3":
+            self.vector_store.load_from_backend(self.storage_backend, "vector_store")
+        else:
+            self.vector_store.load()
         if self.vector_store.metadata:
             self.graph.ingest_documents(self.vector_store.metadata)
 

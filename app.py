@@ -78,6 +78,7 @@ def main() -> None:
         st.divider()
         st.metric("Indexed chunks", service.document_count)
         st.metric("Neo4j enabled", "Yes" if service.settings.use_neo4j else "No")
+        st.metric("Storage backend", service.settings.storage_backend.upper())
 
     st.subheader("Ask a question")
     query = st.text_input(
