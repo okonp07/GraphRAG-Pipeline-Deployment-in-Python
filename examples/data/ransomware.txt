@@ -1,0 +1,2 @@
+Ransomware incidents can disrupt operations and lock critical systems.
+Backups, prompt patching, endpoint monitoring, and incident response planning help mitigate ransomware impact.

@@ -1,145 +1,199 @@
 # GraphRAG Pipeline with Neo4j and Vector DB
 
-A retrieval-augmented generation (RAG) system that combines the power of knowledge graphs (Neo4j) with vector similarity search to enhance information retrieval and question answering capabilities.
+A retrieval-augmented generation (RAG) system that combines a knowledge graph (Neo4j) with vector similarity search to improve document retrieval for question answering workloads.
 
 ## Overview
 
-This project implements a hybrid retrieval system that leverages:
-- **Neo4j** for structured knowledge graph querying
-- **Vector Database** (FAISS) for semantic similarity search
-- **Hybrid Retrieval Pipeline** that combines both approaches for more comprehensive information retrieval
+This repository now includes a complete Python project structure alongside the original notebooks. The runnable code implements a hybrid retrieval pipeline that uses:
 
-By combining graph-based querying with vector similarity search, this pipeline provides more contextually relevant and accurate results than using either approach alone.
+- **Neo4j** for graph-based document/entity lookup
+- **FAISS** for semantic vector search
+- **A hybrid retriever** to combine graph and vector results into one ranked output
+
+The current implementation is designed to work in two modes:
+
+- **Full mode:** Neo4j + FAISS + sentence-transformers
+- **Local fallback mode:** in-memory graph search + deterministic hashing embeddings when optional services or models are unavailable
+
+That means you can develop and test the project locally even before connecting a live Neo4j instance.
 
 ## Features
 
 - Document ingestion and processing pipeline
 - Text chunking and embedding generation
-- Knowledge graph construction from structured data
+- Knowledge graph construction from extracted cybersecurity terms
 - Vector similarity search for semantic queries
-- Graph traversal for relationship-based queries
-- Hybrid retrieval combining both graph and vector-based results
+- Graph traversal for relationship-based retrieval
+- Hybrid retrieval combining graph and vector results
 - Simple query interface through Python scripts
+- Example scripts and automated tests
 
 ## Installation
 
 ### Prerequisites
 
 - Python 3.8+
-- Neo4j Database (local or cloud instance)
+- Neo4j Database (optional for local development, required for live graph storage)
 - Git
 
 ### Setup
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/graphrag-pipeline.git
-   cd graphrag-pipeline
+   git clone https://github.com/okonp07/GraphRAG-Pipeline-Deployment-in-Python.git
+   cd GraphRAG-Pipeline-Deployment-in-Python
    ```
-   
+
 2. Create a virtual environment and install dependencies:
    ```bash
    python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   source venv/bin/activate
    pip install -r requirements.txt
    ```
 
-3. Configure your Neo4j connection:
+3. Configure your environment:
    ```bash
-   Copy the .env.example file to .env
-   Update the Neo4j connection details in the .env file
+   cp .env.example .env
    ```
+
+4. Update `.env` with your Neo4j connection details if you want live Neo4j support. Set `GRAPHRAG_USE_NEO4J=true` to enable it.
+
 ## Usage
 
 ### Data Ingestion
-Process documents and build both vector embeddings and knowledge graph:
+
+Process documents and build both vector embeddings and the knowledge graph:
+
 ```bash
 python ingest.py --data-dir /path/to/your/documents
 ```
-## Querying the System
+
+Supported input formats:
+
+- `.txt`
+- `.md`
+- `.markdown`
+- `.json`
+
+### Querying the System
+
 Run queries against the combined GraphRAG system:
+
 ```bash
 python query.py --query "Your natural language query here"
 ```
 
-## Advanced Usage
-For more detailed control over the retrieval process:
+### Advanced Usage
+
+Adjust retrieval weights and result counts:
+
 ```bash
-python query.py --query "Your query" --graph-weight 0.7 --vector-weight 0.3 --top-k 5
+python query.py --query "How do I reduce phishing risk?" --graph-weight 0.7 --vector-weight 0.3 --top-k 5
 ```
 
-##  Architecture
-The system consists of three main components:
+## Architecture
 
-**1. Document Processor:** Handles document parsing, chunking, and preprocessing
-**2. Vector Store:** Creates and stores embeddings using FAISS for semantic search
-**3. Knowledge Graph:** Builds and queries a Neo4j graph database for structured information
-**4. Hybrid Retriever:** Combines results from both retrieval methods
+The system consists of four main components:
+
+1. **Document Processor:** Parses files, normalizes text, chunks documents, and extracts basic cybersecurity entities.
+2. **Vector Store:** Creates embeddings and stores them in FAISS, with a NumPy fallback when FAISS is unavailable.
+3. **Knowledge Graph:** Stores document/entity relationships in Neo4j, with an in-memory fallback for local development and tests.
+4. **Hybrid Retriever:** Combines graph and vector search results using configurable weights.
 
 ## Example Query Flow
 
-1. User submits a question
-2. Question is converted to embedding and relevant query patterns
-3. Parallel retrieval from:
-
-- Neo4j (structured data traversal)
-- Vector DB (semantic similarity)
-
-
-4. Results are combined, ranked and returned
+1. User submits a question.
+2. The query is embedded for vector search.
+3. The query is scanned for cybersecurity entities for graph search.
+4. Retrieval runs against:
+   - Neo4j or the in-memory graph index
+   - FAISS or the fallback vector index
+5. Results are merged, weighted, ranked, and returned.
 
 ## File Structure
+
 ```text
 ├── README.md
+├── LICENSE
 ├── requirements.txt
 ├── .env.example
+├── config.py
+├── ingest.py
+├── query.py
 ├── src/
 │   ├── __init__.py
-│   ├── ingest.py           # Document ingestion pipeline
-│   ├── query.py            # Query interface
-│   ├── vector_store.py     # FAISS vector store implementation
-│   ├── knowledge_graph.py  # Neo4j knowledge graph operations
-│   ├── hybrid_retriever.py # Combined retrieval logic
-│   └── utils.py            # Helper functions
+│   ├── ingest.py
+│   ├── query.py
+│   ├── vector_store.py
+│   ├── knowledge_graph.py
+│   ├── hybrid_retriever.py
+│   └── utils.py
 ├── examples/
 │   ├── sample_query.py
-│   └── batch_process.py
-└── tests/
-    ├── test_vector_store.py
-    ├── test_knowledge_graph.py
-    └── test_retrieval.py
+│   ├── batch_process.py
+│   └── data/
+│       ├── phishing.txt
+│       └── ransomware.txt
+├── tests/
+│   ├── test_vector_store.py
+│   ├── test_knowledge_graph.py
+│   └── test_retrieval.py
+├── Knowledge_Base_&_GraphRAG.ipynb
+└── Bonus_Project _Deploying_a_Simple_RAG_Pipeline_in_python.ipynb
 ```
 
-
 ## Configuration
-Edit config.py to customize:
 
-- Chunk size for text splitting
+Edit [config.py](config.py) or update environment variables in `.env` to customize:
+
+- Chunk size and overlap for text splitting
 - Embedding model selection
+- Fallback embedding dimension
 - Neo4j connection parameters
-- Retrieval weights and settings
+- Retrieval weights and default `top_k`
+- Artifact output paths
 
+## Examples
+
+Run the packaged examples after ingestion:
+
+```bash
+python examples/sample_query.py
+python examples/batch_process.py
+```
+
+## Testing
+
+Run the automated test suite with:
+
+```bash
+pytest
+```
 
 ## Contributing
-Contributions are welcome! Please feel free to submit a Pull Request.
 
-1. Fork the repository
-2. Create your feature branch (git checkout -b feature/amazing-feature)
-3. Commit your changes (git commit -m 'Add some amazing feature')
-4. Push to the branch (git push origin feature/amazing-feature)
-4. Open a Pull Request
+Contributions are welcome. A typical workflow is:
+
+1. Fork the repository.
+2. Create your feature branch: `git checkout -b feature/amazing-feature`
+3. Commit your changes: `git commit -m "Add some amazing feature"`
+4. Push to the branch: `git push origin feature/amazing-feature`
+5. Open a Pull Request.
 
 ## License
-This project is licensed under the MIT License - see the LICENSE file for details.
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
 
 ## Acknowledgements
--   [Neo4j](https://neo4j.com/) for graph database technology.
--   [FAISS](https://github.com/facebookresearch/faiss) for efficient similarity search.
--   [LangChain](https://github.com/langchain-ai/langchain) for inspiration on RAG architecture.
-    
+
+- [Neo4j](https://neo4j.com/) for graph database technology
+- [FAISS](https://github.com/facebookresearch/faiss) for vector similarity search
+- [Sentence Transformers](https://www.sbert.net/) for embedding workflows
+- [LangChain](https://github.com/langchain-ai/langchain) for broader RAG inspiration
+
 ## Author
 
 **Okon Prince**  
-*Data Scientist and AI Researcher  
-Developer; Python GraphRAG Pipeline
-Specialized in AI applications for cybersecurity, environmental intelligence, and education.*
+*Data Scientist and AI Researcher*  
+Developer, Python GraphRAG Pipeline  
+Specialized in AI applications for cybersecurity, environmental intelligence, and education.
