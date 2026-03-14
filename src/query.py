@@ -11,9 +11,7 @@ except ImportError:  # pragma: no cover
         return None
 
 from config import get_settings
-from .hybrid_retriever import HybridRetriever
-from .knowledge_graph import KnowledgeGraph
-from .vector_store import VectorStore
+from .app_service import GraphRAGService
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -31,35 +29,15 @@ def main() -> None:
     args = parser.parse_args()
     settings = get_settings()
 
-    vector_store = VectorStore(
-        embedding_model=settings.embedding_model,
-        embedding_dim=settings.embedding_dim,
-        storage_path=settings.vector_store_path,
-    )
-    vector_store.load()
-
-    graph = KnowledgeGraph(
-        uri=settings.neo4j_uri,
-        username=settings.neo4j_username,
-        password=settings.neo4j_password,
-        database=settings.neo4j_database,
-        enabled=settings.use_neo4j,
-    )
-
-    if not graph.documents and vector_store.metadata:
-        graph.ingest_documents(vector_store.metadata)
-
-    retriever = HybridRetriever(
-        vector_store=vector_store,
-        knowledge_graph=graph,
-        vector_weight=args.vector_weight if args.vector_weight is not None else settings.vector_weight,
+    service = GraphRAGService.from_settings(settings)
+    service.configure_weights(
         graph_weight=args.graph_weight if args.graph_weight is not None else settings.graph_weight,
+        vector_weight=args.vector_weight if args.vector_weight is not None else settings.vector_weight,
     )
-
-    results = retriever.search(args.query, top_k=args.top_k or settings.top_k)
+    results = service.query(args.query, top_k=args.top_k or settings.top_k)
     if not results:
         print("No results found. Run ingestion first or check your query.")
-        graph.close()
+        service.close()
         return
 
     for index, result in enumerate(results, start=1):
@@ -73,7 +51,7 @@ def main() -> None:
         print(f"Text: {result['text'][:300]}")
         print("-" * 40)
 
-    graph.close()
+    service.close()
 
 
 if __name__ == "__main__":

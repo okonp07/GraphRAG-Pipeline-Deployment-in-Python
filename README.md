@@ -26,6 +26,7 @@ That means you can develop and test the project locally even before connecting a
 - Graph traversal for relationship-based retrieval
 - Hybrid retrieval combining graph and vector results
 - Simple query interface through Python scripts
+- Streamlit frontend for non-technical users
 - Example scripts and automated tests
 
 ## Installation
@@ -59,6 +60,22 @@ That means you can develop and test the project locally even before connecting a
 4. Update `.env` with your Neo4j connection details if you want live Neo4j support. Set `GRAPHRAG_USE_NEO4J=true` to enable it.
 
 ## Usage
+
+### Frontend App
+
+Launch the Streamlit app for a browser-based experience:
+
+```bash
+streamlit run app.py
+```
+
+The app lets users:
+
+- upload documents
+- build the knowledge base
+- load bundled sample files
+- ask questions in plain English
+- view the best match and supporting results without using the command line
 
 ### Data Ingestion
 
@@ -118,10 +135,12 @@ The system consists of four main components:
 ├── requirements.txt
 ├── .env.example
 ├── config.py
+├── app.py
 ├── ingest.py
 ├── query.py
 ├── src/
 │   ├── __init__.py
+│   ├── app_service.py
 │   ├── ingest.py
 │   ├── query.py
 │   ├── vector_store.py
@@ -168,6 +187,12 @@ Run the automated test suite with:
 
 ```bash
 pytest
+```
+
+To smoke test the frontend locally:
+
+```bash
+streamlit run app.py
 ```
 
 ## Contributing
