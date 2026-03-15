@@ -297,7 +297,8 @@ def render_sidebar_nav(service: GraphRAGService) -> tuple[float, float, int]:
     with st.sidebar:
         st.markdown("## Mission Control")
         st.caption("Use the links below to move between querying, corpus management, and retrieval tuning.")
-        st.page_link("app.py", label="Overview", icon="🏠")
+        st.markdown("**Overview**")
+        st.caption("Use the app home page as the landing screen for the workspace.")
         st.page_link("pages/1_Ask_Assistant.py", label="Ask Assistant", icon="🧠")
         st.page_link("pages/2_Knowledge_Base.py", label="Knowledge Base", icon="📚")
         st.page_link("pages/3_Retrieval_Settings.py", label="Retrieval Settings", icon="🎛️")
