@@ -1,277 +1,175 @@
-# GraphRAG Pipeline with Neo4j and Vector DB
+# Cybersecurity GraphRAG Assistant
 
-A retrieval-augmented generation (RAG) system that combines a knowledge graph (Neo4j) with vector similarity search to improve document retrieval for question answering workloads.
+A cybersecurity-focused GraphRAG project that combines document ingestion, vector retrieval, entity-aware graph search, and an interactive web app.
 
-## Live Demo
+This repository is now the canonical home for the project. The older notebook-only cybersecurity prototype is being folded into this codebase so we can build one clean end-to-end product instead of maintaining two overlapping repos.
 
-[Launch the Streamlit app](https://graphrag-pipeline-deployment-in-python-uxc9cluat75f24nn8vzcca.streamlit.app/)
+## What This Project Does
 
-## Overview
+The assistant is designed to help users work with cybersecurity knowledge sources such as advisories, incident notes, malware writeups, and security playbooks.
 
-This repository now includes a complete Python project structure alongside the original notebooks. The runnable code implements a hybrid retrieval pipeline that uses:
+It currently supports:
 
-- **Neo4j** for graph-based document/entity lookup
-- **FAISS** for semantic vector search
-- **A hybrid retriever** to combine graph and vector results into one ranked output
-- **Streamlit** for a browser-based interface
-- **S3-compatible object storage** for persistent online artifacts
+- document ingestion and chunking
+- parsing of TXT, Markdown, JSON, HTML, and PDF documents
+- ingestion from a cybersecurity dataset source such as `zeroshot/cybersecurity-corpus`
+- vector similarity search
+- graph-based retrieval over extracted cybersecurity entities
+- hybrid ranking across graph and vector search
+- a Streamlit frontend for document upload and search
+- local fallback mode for development without full cloud infrastructure
 
-The current implementation is designed to work in two modes:
+## Why This Repo Is The Main One
 
-- **Full mode:** Neo4j + FAISS + sentence-transformers
-- **Cloud mode:** Streamlit Cloud + Neo4j AuraDB + S3-compatible storage
-- **Local fallback mode:** in-memory graph search + deterministic hashing embeddings when optional services or models are unavailable
+Compared with the older notebook prototype, this repository already has:
 
-That means you can develop and test the project locally even before connecting a live Neo4j instance.
+- a proper Python project structure
+- a reusable service layer
+- automated tests
+- a browser-based frontend
+- local and cloud storage support
+- room to add answer generation, richer ingestion, and deployment polish
 
-## Features
+The notebook prototype is being retained here only as legacy reference material while the production-ready app evolves in this repo.
 
-- Document ingestion and processing pipeline
-- Text chunking and embedding generation
-- Knowledge graph construction from extracted cybersecurity terms
-- Vector similarity search for semantic queries
-- Graph traversal for relationship-based retrieval
-- Hybrid retrieval combining graph and vector results
-- Simple query interface through Python scripts
-- Streamlit frontend for non-technical users
-- Streamlit Cloud deployment configuration
-- Streamlit secrets-based configuration support
-- S3-compatible artifact persistence for hosted deployments
-- Example scripts and automated tests
+## Current Architecture
+
+The project currently consists of four core layers:
+
+1. `Ingestion`: reads supported documents, normalizes text, chunks content, and extracts cybersecurity entities.
+2. `Vector Retrieval`: embeds chunks and searches them semantically using FAISS or a NumPy fallback.
+3. `Knowledge Graph`: stores document-to-entity relationships in Neo4j or an in-memory fallback.
+4. `Frontend + Service Layer`: exposes ingestion and retrieval through Streamlit and shared Python services.
+
+## Cybersecurity Direction
+
+This codebase is being specialized into a cybersecurity assistant that can reason over:
+
+- threats such as ransomware, phishing, spyware, and breaches
+- defensive concepts such as MFA, patching, EDR, and zero trust
+- structured indicators such as CVEs, ATT&CK technique IDs, IP addresses, hashes, and domains
+
+The first implementation pass already upgraded entity extraction to recognize several of those structured indicators.
+
+## MVP Roadmap
+
+The near-term goal is a full cybersecurity GraphRAG assistant with cited answers.
+
+Planned milestones:
+
+1. strengthen cybersecurity extraction and retrieval quality
+2. add grounded answer generation with citations
+3. support richer ingestion formats such as PDF and HTML
+4. improve the frontend into a chat-style analyst experience
+5. polish deployment, persistence, and evaluation
+
+The detailed working plan lives in [CYBERSECURITY_MVP_ROADMAP.md](/Users/researchanddevelopment2/Documents/Zindi/GraphRAG-Pipeline-Deployment-in-Python/CYBERSECURITY_MVP_ROADMAP.md).
+
+## Project Structure
+
+```text
+├── app.py
+├── config.py
+├── ingest.py
+├── query.py
+├── CYBERSECURITY_MVP_ROADMAP.md
+├── notebooks/
+│   └── legacy/
+├── src/
+│   ├── app_service.py
+│   ├── hybrid_retriever.py
+│   ├── ingest.py
+│   ├── knowledge_graph.py
+│   ├── query.py
+│   ├── storage.py
+│   ├── utils.py
+│   └── vector_store.py
+├── examples/
+├── tests/
+└── .streamlit/
+```
 
 ## Installation
 
 ### Prerequisites
 
 - Python 3.8+
-- Neo4j Database (optional for local development, required for live graph storage)
 - Git
+- Neo4j if you want live graph storage instead of fallback mode
 
 ### Setup
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/okonp07/GraphRAG-Pipeline-Deployment-in-Python.git
-   cd GraphRAG-Pipeline-Deployment-in-Python
-   ```
+```bash
+git clone https://github.com/okonp07/GraphRAG-Pipeline-Deployment-in-Python.git
+cd GraphRAG-Pipeline-Deployment-in-Python
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
 
-2. Create a virtual environment and install dependencies:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate
-   pip install -r requirements.txt
-   ```
+If you use local environment variables, create a `.env` file and add your Neo4j and storage settings as needed.
 
-3. Configure your environment:
-   ```bash
-   cp .env.example .env
-   ```
+## Running The App
 
-4. Update `.env` with your Neo4j connection details if you want live Neo4j support. Set `GRAPHRAG_USE_NEO4J=true` to enable it.
-
-### Streamlit Cloud Deployment
-
-To deploy online:
-
-1. Push this repository to GitHub.
-2. Create a Streamlit Community Cloud app that points at `app.py`.
-3. Add your production secrets in the Streamlit Cloud secrets editor using the template in [.streamlit/secrets.toml.example](/Users/researchanddevelopment2/Documents/Zindi/GraphRAG-Pipeline-Deployment-in-Python/.streamlit/secrets.toml.example).
-4. Use:
-   - a managed Neo4j instance such as Neo4j AuraDB
-   - an S3-compatible bucket for persistent vector and document artifacts
-
-The repo includes Streamlit config in [.streamlit/config.toml](/Users/researchanddevelopment2/Documents/Zindi/GraphRAG-Pipeline-Deployment-in-Python/.streamlit/config.toml).
-
-## Usage
-
-### Frontend App
-
-Launch the Streamlit app for a browser-based experience:
+Start the frontend:
 
 ```bash
 streamlit run app.py
 ```
 
-The app lets users:
+The app lets you:
 
-- upload documents
-- build the knowledge base
-- load bundled sample files
+- upload security-related documents
+- load a built-in cybersecurity corpus
+- build a knowledge base
+- load bundled sample data
 - ask questions in plain English
-- view the best match and supporting results without using the command line
+- inspect supporting evidence returned by the retriever
 
-For hosted deployments, configure `storage.backend = "s3"` in Streamlit secrets so uploaded knowledge bases persist outside the app container.
+## Ingestion And Querying
 
-### Data Ingestion
-
-Process documents and build both vector embeddings and the knowledge graph:
+Ingest a directory of documents:
 
 ```bash
 python ingest.py --data-dir /path/to/your/documents
 ```
 
-Supported input formats:
+Ingest the default cybersecurity dataset source:
+
+```bash
+python ingest.py --dataset-name zeroshot/cybersecurity-corpus --dataset-split train
+```
+
+You can also configure the default dataset source through:
+
+- `GRAPHRAG_DATASET_NAME`
+- `GRAPHRAG_DATASET_SPLIT`
+- `GRAPHRAG_DATASET_TEXT_FIELD`
+
+Run a query from the command line:
+
+```bash
+python query.py --query "How do we reduce phishing risk?"
+```
+
+## Supported Formats Today
 
 - `.txt`
 - `.md`
 - `.markdown`
 - `.json`
-
-### Querying the System
-
-Run queries against the combined GraphRAG system:
-
-```bash
-python query.py --query "Your natural language query here"
-```
-
-### Advanced Usage
-
-Adjust retrieval weights and result counts:
-
-```bash
-python query.py --query "How do I reduce phishing risk?" --graph-weight 0.7 --vector-weight 0.3 --top-k 5
-```
-
-## Architecture
-
-The system consists of four main components:
-
-1. **Document Processor:** Parses files, normalizes text, chunks documents, and extracts basic cybersecurity entities.
-2. **Vector Store:** Creates embeddings and stores them in FAISS, with a NumPy fallback when FAISS is unavailable.
-3. **Knowledge Graph:** Stores document/entity relationships in Neo4j, with an in-memory fallback for local development and tests.
-4. **Hybrid Retriever:** Combines graph and vector search results using configurable weights.
-
-## Example Query Flow
-
-1. User submits a question.
-2. The query is embedded for vector search.
-3. The query is scanned for cybersecurity entities for graph search.
-4. Retrieval runs against:
-   - Neo4j or the in-memory graph index
-   - FAISS or the fallback vector index
-5. Results are merged, weighted, ranked, and returned.
-
-## File Structure
-
-```text
-├── README.md
-├── LICENSE
-├── requirements.txt
-├── .env.example
-├── .streamlit/
-│   ├── config.toml
-│   └── secrets.toml.example
-├── config.py
-├── app.py
-├── ingest.py
-├── query.py
-├── src/
-│   ├── __init__.py
-│   ├── app_service.py
-│   ├── ingest.py
-│   ├── query.py
-│   ├── storage.py
-│   ├── vector_store.py
-│   ├── knowledge_graph.py
-│   ├── hybrid_retriever.py
-│   └── utils.py
-├── examples/
-│   ├── sample_query.py
-│   ├── batch_process.py
-│   └── data/
-│       ├── phishing.txt
-│       └── ransomware.txt
-├── tests/
-│   ├── test_vector_store.py
-│   ├── test_knowledge_graph.py
-│   └── test_retrieval.py
-├── Knowledge_Base_&_GraphRAG.ipynb
-└── Bonus_Project _Deploying_a_Simple_RAG_Pipeline_in_python.ipynb
-```
-
-## Configuration
-
-Edit [config.py](config.py) or update environment variables in `.env` to customize:
-
-- Chunk size and overlap for text splitting
-- Embedding model selection
-- Fallback embedding dimension
-- Neo4j connection parameters
-- Storage backend, bucket, prefix, and region
-- Retrieval weights and default `top_k`
-- Artifact output paths
-
-When running on Streamlit Cloud, configuration can come from:
-
-- environment variables
-- `.env` for local development
-- Streamlit secrets for hosted deployment
-
-## Examples
-
-Run the packaged examples after ingestion:
-
-```bash
-python examples/sample_query.py
-python examples/batch_process.py
-```
+- `.html`
+- `.htm`
+- `.pdf`
 
 ## Testing
 
-Run the automated test suite with:
+Run the test suite with:
 
 ```bash
 pytest
 ```
 
-To smoke test the frontend locally:
+## Legacy Assets
 
-```bash
-streamlit run app.py
-```
-
-## Online Persistence
-
-The app now supports persistent online storage for uploaded knowledge bases.
-
-- `local` storage backend:
-  stores FAISS indexes and document metadata on the local filesystem
-- `s3` storage backend:
-  stores FAISS indexes and document metadata in an S3-compatible bucket
-
-Artifacts persisted online include:
-
-- vector index metadata
-- FAISS index binary when available
-- document metadata JSON
-
-This avoids losing uploaded knowledge bases when the hosted app restarts.
-
-## Contributing
-
-Contributions are welcome. A typical workflow is:
-
-1. Fork the repository.
-2. Create your feature branch: `git checkout -b feature/amazing-feature`
-3. Commit your changes: `git commit -m "Add some amazing feature"`
-4. Push to the branch: `git push origin feature/amazing-feature`
-5. Open a Pull Request.
-
-## License
-
-This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
-
-## Acknowledgements
-
-- [Neo4j](https://neo4j.com/) for graph database technology
-- [FAISS](https://github.com/facebookresearch/faiss) for vector similarity search
-- [Sentence Transformers](https://www.sbert.net/) for embedding workflows
-- [LangChain](https://github.com/langchain-ai/langchain) for broader RAG inspiration
-
-## Author
-
-**Okon Prince**  
-*Data Scientist and AI Researcher*  
-Developer, Python GraphRAG Pipeline  
-Specialized in AI applications for cybersecurity, environmental intelligence, and education.
+Legacy notebooks are being retained in `notebooks/legacy/` as reference material during the merge. They are not the primary implementation path anymore.

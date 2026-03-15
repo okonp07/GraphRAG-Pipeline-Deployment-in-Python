@@ -54,6 +54,24 @@ class Settings:
     embedding_dim: int = int(
         _get_setting("GRAPHRAG_EMBEDDING_DIM", "256", "app", "embedding_dim")
     )
+    dataset_name: str = _get_setting(
+        "GRAPHRAG_DATASET_NAME",
+        "zeroshot/cybersecurity-corpus",
+        "dataset",
+        "name",
+    )
+    dataset_split: str = _get_setting(
+        "GRAPHRAG_DATASET_SPLIT",
+        "train",
+        "dataset",
+        "split",
+    )
+    dataset_text_field: str = _get_setting(
+        "GRAPHRAG_DATASET_TEXT_FIELD",
+        "",
+        "dataset",
+        "text_field",
+    )
     vector_store_path: Path = Path(
         _get_setting(
             "GRAPHRAG_VECTOR_STORE_PATH",
