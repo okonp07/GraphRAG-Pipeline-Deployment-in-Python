@@ -296,7 +296,12 @@ def get_retrieval_state(service: GraphRAGService) -> tuple[float, float, int]:
 def render_sidebar_nav(service: GraphRAGService) -> tuple[float, float, int]:
     with st.sidebar:
         st.markdown("## Mission Control")
-        st.caption("Use the page navigation above to move between querying, corpus management, and retrieval tuning.")
+        st.caption("Use the links below to move between querying, corpus management, and retrieval tuning.")
+        st.page_link("app.py", label="Overview", icon="🏠")
+        st.page_link("pages/1_Ask_Assistant.py", label="Ask Assistant", icon="🧠")
+        st.page_link("pages/2_Knowledge_Base.py", label="Knowledge Base", icon="📚")
+        st.page_link("pages/3_Retrieval_Settings.py", label="Retrieval Settings", icon="🎛️")
+        st.divider()
         graph_weight, vector_weight, top_k = get_retrieval_state(service)
         st.metric("Indexed chunks", service.document_count)
         st.metric("Graph engine", "Neo4j" if service.settings.use_neo4j else "Fallback")

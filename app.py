@@ -37,11 +37,14 @@ col1, col2, col3 = st.columns(3)
 with col1:
     st.markdown("#### Ask Assistant")
     st.write("Question answering, grounded responses, citations, and ranked supporting evidence.")
+    st.page_link("pages/1_Ask_Assistant.py", label="Open Ask Assistant", icon="🧠")
 with col2:
     st.markdown("#### Knowledge Base")
     st.write("Uploads, sample data, built-in corpus loading, and workspace maintenance.")
+    st.page_link("pages/2_Knowledge_Base.py", label="Open Knowledge Base", icon="📚")
 with col3:
     st.markdown("#### Retrieval Settings")
     st.write("Session-level tuning for graph weight, vector weight, and result depth.")
+    st.page_link("pages/3_Retrieval_Settings.py", label="Open Retrieval Settings", icon="🎛️")
 
-st.info("Use Streamlit's page navigation in the sidebar to move between these workspaces.")
+st.info("Use the page links above or the sidebar Mission Control links to move between workspaces.")
