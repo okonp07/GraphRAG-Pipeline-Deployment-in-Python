@@ -34,11 +34,17 @@ def main() -> None:
         graph_weight=args.graph_weight if args.graph_weight is not None else settings.graph_weight,
         vector_weight=args.vector_weight if args.vector_weight is not None else settings.vector_weight,
     )
-    results = service.query(args.query, top_k=args.top_k or settings.top_k)
+    response = service.ask(args.query, top_k=args.top_k or settings.top_k)
+    results = response["results"]
     if not results:
         print("No results found. Run ingestion first or check your query.")
         service.close()
         return
+
+    print("Answer")
+    print(response["answer"])
+    print(f"Confidence: {response['confidence']}")
+    print("-" * 40)
 
     for index, result in enumerate(results, start=1):
         print(f"Result {index}")

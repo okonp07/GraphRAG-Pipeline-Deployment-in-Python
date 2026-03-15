@@ -1,4 +1,4 @@
-"""Utility helpers for ingestion, chunking, and lightweight entity extraction."""
+"""Utility helpers for ingestion, chunking, and cybersecurity entity extraction."""
 
 from __future__ import annotations
 
@@ -7,24 +7,59 @@ import re
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
+try:
+    from pypdf import PdfReader  # type: ignore
+except ImportError:  # pragma: no cover
+    PdfReader = None
 
-SUPPORTED_EXTENSIONS = {".txt", ".md", ".markdown", ".json"}
+
+SUPPORTED_EXTENSIONS = {".txt", ".md", ".markdown", ".json", ".html", ".htm", ".pdf"}
 
 CYBERSECURITY_TERMS = {
     "malware": "THREAT",
     "ransomware": "THREAT",
+    "spyware": "THREAT",
+    "trojan": "THREAT",
+    "worm": "THREAT",
     "phishing": "ATTACK_VECTOR",
+    "spear phishing": "ATTACK_VECTOR",
+    "business email compromise": "ATTACK_VECTOR",
     "vulnerability": "VULNERABILITY",
     "exploit": "ATTACK_TECHNIQUE",
     "cve": "VULNERABILITY",
     "ddos": "ATTACK_TECHNIQUE",
+    "botnet": "ATTACK_TECHNIQUE",
+    "brute force": "ATTACK_TECHNIQUE",
+    "credential stuffing": "ATTACK_TECHNIQUE",
+    "privilege escalation": "ATTACK_TECHNIQUE",
+    "lateral movement": "ATTACK_TECHNIQUE",
+    "data exfiltration": "ATTACK_TECHNIQUE",
     "firewall": "DEFENSE_MECHANISM",
+    "mfa": "DEFENSE_TECHNIQUE",
+    "multi-factor authentication": "DEFENSE_TECHNIQUE",
     "encryption": "DEFENSE_TECHNIQUE",
     "authentication": "DEFENSE_TECHNIQUE",
     "patch": "DEFENSE_TECHNIQUE",
+    "edr": "DEFENSE_TECHNIQUE",
+    "xdr": "DEFENSE_TECHNIQUE",
+    "siem": "DEFENSE_TECHNIQUE",
+    "zero trust": "DEFENSE_STRATEGY",
+    "least privilege": "DEFENSE_STRATEGY",
     "zero-day": "VULNERABILITY",
     "breach": "THREAT",
     "intrusion": "ATTACK_TECHNIQUE",
+    "mitre att&ck": "FRAMEWORK",
+    "kill chain": "FRAMEWORK",
+}
+
+PATTERN_ENTITY_TYPES = {
+    r"\bCVE-\d{4}-\d{4,7}\b": "VULNERABILITY",
+    r"\bT\d{4}(?:\.\d{3})?\b": "ATTACK_TECHNIQUE",
+    r"\b(?:\d{1,3}\.){3}\d{1,3}\b": "IP_ADDRESS",
+    r"\b[a-fA-F0-9]{32}\b": "MD5",
+    r"\b[a-fA-F0-9]{40}\b": "SHA1",
+    r"\b[a-fA-F0-9]{64}\b": "SHA256",
+    r"\b(?:[a-zA-Z0-9-]+\.)+(?:com|net|org|io|co|ai|biz|info|ru|cn)\b": "DOMAIN",
 }
 
 
@@ -71,9 +106,37 @@ def _extract_json_text(payload: Any) -> str:
     return str(payload)
 
 
+def _extract_html_text(raw_html: str) -> str:
+    without_scripts = re.sub(
+        r"<(script|style)\b[^>]*>.*?</\1>",
+        " ",
+        raw_html,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    without_tags = re.sub(r"<[^>]+>", " ", without_scripts)
+    return normalize_text(without_tags)
+
+
+def _extract_pdf_text(path: Path) -> str:
+    if PdfReader is None:
+        raise RuntimeError(
+            "PDF ingestion requires the 'pypdf' package. Install dependencies from requirements.txt."
+        )
+    reader = PdfReader(str(path))
+    page_text = []
+    for page in reader.pages:
+        page_text.append(page.extract_text() or "")
+    return normalize_text(" ".join(page_text))
+
+
 def read_document(path: Path) -> str:
-    if path.suffix.lower() == ".json":
+    suffix = path.suffix.lower()
+    if suffix == ".json":
         return normalize_text(_extract_json_text(json.loads(path.read_text())))
+    if suffix in {".html", ".htm"}:
+        return _extract_html_text(path.read_text())
+    if suffix == ".pdf":
+        return _extract_pdf_text(path)
     return normalize_text(path.read_text())
 
 
@@ -89,6 +152,7 @@ def load_documents(data_dir: Path, chunk_size: int, chunk_overlap: int) -> List[
                 {
                     "id": f"{path.stem}-{idx}",
                     "source_path": str(path),
+                    "document_type": path.suffix.lower().lstrip(".") or "text",
                     "chunk_index": idx,
                     "text": chunk,
                     "entities": extract_entities(chunk),
@@ -100,9 +164,22 @@ def load_documents(data_dir: Path, chunk_size: int, chunk_overlap: int) -> List[
 def extract_entities(text: str) -> List[Dict[str, str]]:
     lowered = text.lower()
     entities = []
+    seen = set()
     for term, entity_type in CYBERSECURITY_TERMS.items():
         if term in lowered:
+            key = (term, entity_type)
+            if key in seen:
+                continue
+            seen.add(key)
             entities.append({"name": term, "type": entity_type})
+    for pattern, entity_type in PATTERN_ENTITY_TYPES.items():
+        for match in re.finditer(pattern, text, flags=re.IGNORECASE):
+            value = match.group(0)
+            key = (value.lower(), entity_type)
+            if key in seen:
+                continue
+            seen.add(key)
+            entities.append({"name": value, "type": entity_type})
     return entities
 
 

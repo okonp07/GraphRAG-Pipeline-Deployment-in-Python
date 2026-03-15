@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import List
 
 from config import Settings
+from .dataset_loader import load_hf_documents
+from .generator import AnswerGenerator
 from .storage import build_storage_backend
 from .hybrid_retriever import HybridRetriever
 from .knowledge_graph import KnowledgeGraph
@@ -35,6 +37,7 @@ class GraphRAGService:
             vector_weight=settings.vector_weight,
             graph_weight=settings.graph_weight,
         )
+        self.generator = AnswerGenerator()
 
     @classmethod
     def from_settings(cls, settings: Settings) -> "GraphRAGService":
@@ -64,6 +67,35 @@ class GraphRAGService:
             chunk_size=self.settings.chunk_size,
             chunk_overlap=self.settings.chunk_overlap,
         )
+        return self._ingest_documents(documents)
+
+    def ingest_hf_dataset(
+        self,
+        dataset_name: str | None = None,
+        split: str | None = None,
+        text_field: str | None = None,
+        limit: int | None = None,
+    ) -> int:
+        documents = load_hf_documents(
+            dataset_name=dataset_name or self.settings.dataset_name,
+            split=split or self.settings.dataset_split,
+            text_field=text_field or self.settings.dataset_text_field or None,
+            chunk_size=self.settings.chunk_size,
+            chunk_overlap=self.settings.chunk_overlap,
+            limit=limit,
+        )
+        return self._ingest_documents(documents)
+
+    def query(self, query_text: str, top_k: int | None = None) -> List[dict]:
+        return self.retriever.search(query_text, top_k=top_k or self.settings.top_k)
+
+    def ask(self, query_text: str, top_k: int | None = None) -> dict:
+        results = self.query(query_text, top_k=top_k)
+        answer_payload = self.generator.generate(query_text, results)
+        answer_payload["results"] = results
+        return answer_payload
+
+    def _ingest_documents(self, documents: List[dict]) -> int:
         self.reset()
         self.vector_store.add_documents(documents)
         if self.settings.storage_backend.lower() == "s3":
@@ -79,9 +111,6 @@ class GraphRAGService:
                 content_type="application/json",
             )
         return len(documents)
-
-    def query(self, query_text: str, top_k: int | None = None) -> List[dict]:
-        return self.retriever.search(query_text, top_k=top_k or self.settings.top_k)
 
     def load_existing_artifacts(self) -> None:
         if self.settings.storage_backend.lower() == "s3":

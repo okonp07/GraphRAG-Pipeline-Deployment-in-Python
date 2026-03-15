@@ -196,10 +196,13 @@ class VectorStore:
             self.index = faiss.read_index(temp_file.name)
 
     def _rebuild_index(self) -> None:
+        if not self.metadata:
+            self.index = NumpyIndex(self.embedding_dim)
+            return
+        vectors = np.asarray(
+            self.embedder.encode([item["text"] for item in self.metadata]),
+            dtype="float32",
+        )
+        self.embedding_dim = vectors.shape[1]
         self.index = NumpyIndex(self.embedding_dim)
-        if self.metadata:
-            vectors = np.asarray(
-                self.embedder.encode([item["text"] for item in self.metadata]),
-                dtype="float32",
-            )
-            self.index.add(vectors)
+        self.index.add(vectors)
